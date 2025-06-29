@@ -1,0 +1,525 @@
+-------------------------------------------------------
+-- SERVICES
+-------------------------------------------------------
+local Players            = game:GetService("Players")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local RunService         = game:GetService("RunService")
+local UserInputService   = game:GetService("UserInputService")
+
+local player  = Players.LocalPlayer
+local camera  = workspace.CurrentCamera
+
+-------------------------------------------------------
+-- CAMERA PRESETS
+-------------------------------------------------------
+local cameraPositions = {
+	{ name = "Tundra", position = Vector3.new(-1394, 44, 1228) },
+	{ name = "Holo",   position = Vector3.new(-31,   60, 1089) },
+	{ name = "Castle", position = Vector3.new(2486.92, 167, -3284.41) },
+}
+
+local selectedPosition = cameraPositions[1].position
+local selectedY        = selectedPosition.Y
+
+local function camCF(pos)                 return CFrame.new(pos, pos - Vector3.new(0,10,0)) end
+local function updatedCF(y)               return camCF(Vector3.new(selectedPosition.X,y,selectedPosition.Z)) end
+local targetCFrame                        = updatedCF(selectedY)
+
+-------------------------------------------------------
+-- MAIN GUI
+-------------------------------------------------------
+local gui  = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name   = "CameraUI"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", gui)
+frame.Size  = UDim2.new(0,240,0,445)            -- 버튼 추가로 높이 늘림
+frame.Position = UDim2.new(1,-250,1,-445)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BackgroundTransparency = .2
+frame.BorderSizePixel = 0
+frame.Active = true
+
+-- UI 전체 0.7배 축소용 UIScale
+local uiScale = Instance.new("UIScale", frame)
+uiScale.Scale = 0.7
+
+-------------------------------------------------------
+-- DRAG BAR
+-------------------------------------------------------
+local dragBar = Instance.new("Frame", frame)
+dragBar.Size  = UDim2.new(1,0,0,20)
+dragBar.BackgroundColor3 = Color3.fromRGB(204,51,51)
+
+local dragging, dragStart, startPos = false, nil, nil
+dragBar.InputBegan:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+		dragging=true; dragStart=i.Position; startPos=frame.Position
+		i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
+	end
+end)
+UserInputService.InputChanged:Connect(function(i)
+	if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+		local d=i.Position-dragStart
+		frame.Position=startPos+UDim2.new(0,d.X,0,d.Y)
+	end
+end)
+
+-------------------------------------------------------
+-- UTILITY BUTTON CREATOR
+-------------------------------------------------------
+local function makeBtn(y,text,h)
+	local b=Instance.new("TextButton",frame)
+	b.Size=UDim2.new(0,220,0,h or 30)
+	b.Position=UDim2.new(0.5,-110,0,y)
+	b.BackgroundColor3=Color3.fromRGB(70,70,70)
+	b.TextColor3=Color3.fromRGB(255,255,255)
+	b.Font=Enum.Font.Gotham
+	b.TextSize=14
+	b.Text=text
+	return b
+end
+
+-------------------------------------------------------
+-- CAMERA TOGGLE
+-------------------------------------------------------
+getgenv().cameraLocked=false
+local camBtn=Instance.new("TextButton",frame)
+camBtn.Size=UDim2.new(0,220,0,40)
+camBtn.Position=UDim2.new(0.5,-110,0,25)
+camBtn.BackgroundColor3=Color3.fromRGB(50,50,50)
+camBtn.TextColor3=Color3.fromRGB(255,255,255)
+camBtn.Font=Enum.Font.GothamBold
+camBtn.TextSize=18
+camBtn.Text="🔒 Lock Camera"
+
+local camConn
+local function toggleCamera()
+	getgenv().cameraLocked=not getgenv().cameraLocked
+	if getgenv().cameraLocked then
+		getgenv().origCamType=camera.CameraType
+		camera.CameraType=Enum.CameraType.Scriptable
+		camConn=RunService.RenderStepped:Connect(function() camera.CFrame=targetCFrame end)
+	else
+		camera.CameraType=getgenv().origCamType or Enum.CameraType.Custom
+		if camConn then camConn:Disconnect() end
+	end
+	camBtn.Text=getgenv().cameraLocked and "🔓 Unlock Camera" or "🔒 Lock Camera"
+end
+camBtn.MouseButton1Click:Connect(toggleCamera)
+
+-------------------------------------------------------
+-- POSITION SELECTOR
+-------------------------------------------------------
+local chooseBtn=makeBtn(70,"📍 Select Position")
+local listFrame=Instance.new("Frame",frame)
+listFrame.Size=UDim2.new(0,220,0,100)
+listFrame.Position=UDim2.new(0.5,-110,0,105)
+listFrame.BackgroundColor3=Color3.fromRGB(40,40,40)
+listFrame.Visible=false
+
+local scroll=Instance.new("ScrollingFrame",listFrame)
+scroll.Size=UDim2.new(1,0,1,0)
+scroll.CanvasSize=UDim2.new(0,0,0,#cameraPositions*35)
+scroll.ScrollBarThickness=6
+scroll.BackgroundTransparency=1
+
+for i,data in ipairs(cameraPositions) do
+	local b=Instance.new("TextButton",scroll)
+	b.Size=UDim2.new(1,-10,0,30)
+	b.Position=UDim2.new(0,5,0,(i-1)*35)
+	b.BackgroundColor3=Color3.fromRGB(90,90,90)
+	b.TextColor3=Color3.fromRGB(255,255,255)
+	b.Font=Enum.Font.Gotham
+	b.TextSize=14
+	b.Text=data.name
+	b.MouseButton1Click:Connect(function()
+		selectedPosition=data.position
+		selectedY=data.position.Y
+		targetCFrame=updatedCF(selectedY)
+		yLabel.Text=("Y: %d"):format(selectedY)
+		setKnobFromY(selectedY)
+		listFrame.Visible=false
+		yLabel.Visible,slider.Visible=true,true
+	end)
+end
+chooseBtn.MouseButton1Click:Connect(function()
+	local open=not listFrame.Visible
+	listFrame.Visible=open
+	yLabel.Visible,slider.Visible=not open,not open
+end)
+
+-------------------------------------------------------
+-- Y SLIDER
+-------------------------------------------------------
+local yLabel=Instance.new("TextLabel",frame)
+yLabel.Size=UDim2.new(0,220,0,20)
+yLabel.Position=UDim2.new(0.5,-110,0,140)
+yLabel.BackgroundTransparency=1
+yLabel.TextColor3=Color3.fromRGB(255,255,255)
+yLabel.Font=Enum.Font.Gotham
+yLabel.TextSize=16
+yLabel.Text=("Y: %d"):format(selectedY)
+
+local slider=Instance.new("Frame",frame)
+slider.Size=UDim2.new(0,140,0,20)
+slider.Position=UDim2.new(0.5,-70,0,170)
+slider.BackgroundColor3=Color3.fromRGB(70,70,70)
+
+local knob=Instance.new("Frame",slider)
+knob.Size=UDim2.new(0,10,1,4)
+knob.AnchorPoint=Vector2.new(0.5,0.5)
+knob.BackgroundColor3=Color3.fromRGB(200,200,200)
+
+local SLIDER_MIN,SLIDER_MAX=30,70
+local function setKnobFromY(y)
+	local t=(y-SLIDER_MIN)/(SLIDER_MAX-SLIDER_MIN)
+	knob.Position=UDim2.new(math.clamp(t,0,1),0,0.5,0)
+end
+local function updateSlider(x)
+	local left,w=slider.AbsolutePosition.X,slider.AbsoluteSize.X
+	local t=math.clamp((x-left)/w,0,1)
+	selectedY=SLIDER_MIN+t*(SLIDER_MAX-SLIDER_MIN)
+	yLabel.Text=("Y: %d"):format(selectedY+0.5)
+	targetCFrame=updatedCF(selectedY)
+	setKnobFromY(selectedY)
+end
+setKnobFromY(selectedY)
+
+local draggingKnob=false
+slider.InputBegan:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+		draggingKnob=true; updateSlider(i.Position.X)
+	end
+end)
+UserInputService.InputChanged:Connect(function(i)
+	if draggingKnob and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+		updateSlider(i.Position.X)
+	end
+end)
+UserInputService.InputEnded:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then draggingKnob=false end
+end)
+
+-------------------------------------------------------
+-- TELEPORT TOGGLE (0.3s)
+-------------------------------------------------------
+getgenv().teleporting=false; local tpConn
+local tpBtn=makeBtn(210,"🚀 Start Teleport")
+local TP_POS=Vector3.new(2474,1500,-3269)
+tpBtn.MouseButton1Click:Connect(function()
+	getgenv().teleporting=not getgenv().teleporting
+	if getgenv().teleporting then
+		tpBtn.Text="🛑 Stop Teleport"
+		local acc=0
+		tpConn=RunService.Heartbeat:Connect(function(dt)
+			acc+=dt; if acc>=0.1 then acc=0
+				local c=player.Character
+				if c and c:FindFirstChild("HumanoidRootPart") then
+					c.HumanoidRootPart.CFrame=CFrame.new(TP_POS)
+				end
+			end
+		end)
+	else
+		tpBtn.Text="🚀 Start Teleport"
+		if tpConn then tpConn:Disconnect() end
+	end
+end)
+
+-------------------------------------------------------
+-- ANTI‑AFK TOGGLE
+-------------------------------------------------------
+getgenv().antiAFK=false; local afkConn
+local afkBtn=makeBtn(245,"💤 Start Anti-AFK")
+afkBtn.MouseButton1Click:Connect(function()
+	getgenv().antiAFK=not getgenv().antiAFK
+	if getgenv().antiAFK then
+		afkBtn.Text="🛑 Stop Anti-AFK"
+		local acc=0; local vu=game:GetService("VirtualUser")
+		afkConn=RunService.Heartbeat:Connect(function(dt)
+			acc+=dt; if acc>=60 then acc=0
+				vu:Button2Down(Vector2.zero,camera.CFrame); task.wait(1)
+				vu:Button2Up(Vector2.zero,camera.CFrame)
+			end
+		end)
+	else
+		afkBtn.Text="💤 Start Anti-AFK"
+		if afkConn then afkConn:Disconnect() end
+	end
+end)
+
+-------------------------------------------------------
+-- ENEMIES SIZE REDUCE TOGGLE
+-------------------------------------------------------
+getgenv().resizeEnemies=false; local resizeConn
+local resizeBtn=makeBtn(280,"🔁 Toggle Size Reduction")
+resizeBtn.MouseButton1Click:Connect(function()
+	getgenv().resizeEnemies=not getgenv().resizeEnemies
+	if getgenv().resizeEnemies then
+		resizeBtn.Text="⏸ Stop Size Reduction"
+		local acc=0
+		resizeConn=RunService.Heartbeat:Connect(function(dt)
+			acc+=dt; if acc>=0.1 then acc=0
+				local en=workspace:FindFirstChild("Enemies")
+				if en then
+					for _,p in ipairs(en:GetDescendants()) do
+						if p:IsA("BasePart") then p.Size=Vector3.new(0.01,0.01,0.01) end
+					end
+				end
+			end
+		end)
+	else
+		resizeBtn.Text="🔁 Toggle Size Reduction"
+		if resizeConn then resizeConn:Disconnect() end
+	end
+end)
+
+-------------------------------------------------------
+-- NAME INPUT + 0.5s RemoteEvent TOGGLE
+-------------------------------------------------------
+local nameLabel=Instance.new("TextLabel",frame)
+nameLabel.Size=UDim2.new(0,220,0,20)
+nameLabel.Position=UDim2.new(0.5,-110,0,315)
+nameLabel.BackgroundTransparency=1
+nameLabel.TextColor3=Color3.fromRGB(255,255,255)
+nameLabel.Font=Enum.Font.Gotham
+nameLabel.TextSize=16
+nameLabel.Text="Enter Player Name:"
+
+local nameBox=Instance.new("TextBox",frame)
+nameBox.Size=UDim2.new(0,160,0,25)
+nameBox.Position=UDim2.new(0.5,-110,0,340)
+nameBox.BackgroundColor3=Color3.fromRGB(50,50,50)
+nameBox.TextColor3=Color3.fromRGB(255,255,255)
+nameBox.Font=Enum.Font.Gotham
+nameBox.TextSize=16
+nameBox.PlaceholderText="Player Name"
+nameBox.ClearTextOnFocus=false
+nameBox.Text = ""
+
+getgenv().sending=false; local sendConn
+local sendBtn=Instance.new("TextButton",frame)
+sendBtn.Size=UDim2.new(0,50,0,25)
+sendBtn.Position=UDim2.new(0.5,55,0,340)
+sendBtn.BackgroundColor3=Color3.fromRGB(70,70,70)
+sendBtn.TextColor3=Color3.fromRGB(255,255,255)
+sendBtn.Font=Enum.Font.Gotham
+sendBtn.TextSize=16
+sendBtn.Text="▶"
+
+sendBtn.MouseButton1Click:Connect(function()
+	getgenv().sending=not getgenv().sending
+	if getgenv().sending then
+		sendBtn.Text="⏹"
+		local targetName=nameBox.Text
+		if targetName=="" then getgenv().sending=false sendBtn.Text="▶" return end
+		local target=Players:FindFirstChild(targetName)
+		if not target then getgenv().sending=false sendBtn.Text="▶" return end
+		local event=ReplicatedStorage:FindFirstChild("NetserEvent")
+		if not event then getgenv().sending=false sendBtn.Text="▶" return end
+		local acc=0
+		sendConn=RunService.Heartbeat:Connect(function(dt)
+			acc+=dt; if acc>=0.5 then acc=0
+				local args={
+					{
+						data=buffer.fromstring("\t\000\002\n\001\000\001\000\000\000\000\128\132.A"),
+						references={{1,target}}
+					}
+				}
+				event:FireServer(unpack(args))
+			end
+		end)
+	else
+		sendBtn.Text="▶"
+		if sendConn then sendConn:Disconnect() end
+	end
+end)
+
+-------------------------------------------------------
+-- VOTE BUTTON + CHECKBOX TOGGLE
+-------------------------------------------------------
+getgenv().voting = false
+
+local voteLabel = Instance.new("TextLabel", frame)
+voteLabel.Size = UDim2.new(0, 150, 0, 30)
+voteLabel.Position = UDim2.new(0.5, -110, 0, 375)
+voteLabel.BackgroundTransparency = 1
+voteLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+voteLabel.Font = Enum.Font.Gotham
+voteLabel.TextSize = 18
+voteLabel.Text = "🗳️ Vote"
+
+local voteCheckbox = Instance.new("Frame", frame)
+voteCheckbox.Size = UDim2.new(0, 30, 0, 30)
+voteCheckbox.Position = UDim2.new(0.5, 45, 0, 375)
+voteCheckbox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+voteCheckbox.BorderColor3 = Color3.fromRGB(200, 200, 200)
+voteCheckbox.BorderSizePixel = 2
+voteCheckbox.Active = true
+voteCheckbox.Selectable = true
+
+local checkMark = Instance.new("TextLabel", voteCheckbox)
+checkMark.Size = UDim2.new(1, 0, 1, 0)
+checkMark.BackgroundTransparency = 1
+checkMark.TextColor3 = Color3.fromRGB(0, 255, 0)
+checkMark.Font = Enum.Font.GothamBold
+checkMark.TextSize = 24
+checkMark.Text = "✓"
+checkMark.Visible = false
+
+local voteConn
+
+local function startVoting()
+	local acc = 0
+	voteConn = RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc >= 0.5 then
+			acc = 0
+			local args = {
+				{
+					data = buffer.fromstring("!\000\001\002\v\000\000\000BossRushOne"),
+					references = {}
+				}
+			}
+			local event = ReplicatedStorage:FindFirstChild("NetserEvent")
+			if event then
+				event:FireServer(unpack(args))
+			end
+		end
+	end)
+end
+
+local function stopVoting()
+	if voteConn then
+		voteConn:Disconnect()
+		voteConn = nil
+	end
+end
+
+-- ✅ 터치 입력 대응 추가
+voteCheckbox.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		getgenv().voting = not getgenv().voting
+		checkMark.Visible = getgenv().voting
+		if getgenv().voting then
+			startVoting()
+		else
+			stopVoting()
+		end
+	end
+end)
+
+-------------------------------------------------------
+-- AUTO RETRY BUTTON + CHECKBOX TOGGLE
+-------------------------------------------------------
+getgenv().autoRetry = false
+
+local retryLabel = Instance.new("TextLabel", frame)
+retryLabel.Size = UDim2.new(0, 150, 0, 30)
+retryLabel.Position = UDim2.new(0.5, -110, 0, 410)
+retryLabel.BackgroundTransparency = 1
+retryLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+retryLabel.Font = Enum.Font.Gotham
+retryLabel.TextSize = 18
+retryLabel.Text = "🔄 Auto Retry"
+
+local retryCheckbox = Instance.new("Frame", frame)
+retryCheckbox.Size = UDim2.new(0, 30, 0, 30)
+retryCheckbox.Position = UDim2.new(0.5, 45, 0, 410)
+retryCheckbox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+retryCheckbox.BorderColor3 = Color3.fromRGB(200, 200, 200)
+retryCheckbox.BorderSizePixel = 2
+retryCheckbox.Active = true
+retryCheckbox.Selectable = true
+
+local retryCheckMark = Instance.new("TextLabel", retryCheckbox)
+retryCheckMark.Size = UDim2.new(1, 0, 1, 0)
+retryCheckMark.BackgroundTransparency = 1
+retryCheckMark.TextColor3 = Color3.fromRGB(0, 255, 0)
+retryCheckMark.Font = Enum.Font.GothamBold
+retryCheckMark.TextSize = 24
+retryCheckMark.Text = "✓"
+retryCheckMark.Visible = false
+
+local retryConn
+
+local function startAutoRetry()
+	local acc = 0
+	retryConn = RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc >= 0.5 then
+			acc = 0
+			local args = {
+				{
+					data = buffer.fromstring("\"\000\000"),
+					references = {}
+				}
+			}
+			local event = ReplicatedStorage:FindFirstChild("NetserEvent")
+			if event then
+				event:FireServer(unpack(args))
+			end
+		end
+	end)
+end
+
+local function stopAutoRetry()
+	if retryConn then
+		retryConn:Disconnect()
+		retryConn = nil
+	end
+end
+
+-- ✅ 터치 입력 대응 추가
+retryCheckbox.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		getgenv().autoRetry = not getgenv().autoRetry
+		retryCheckMark.Visible = getgenv().autoRetry
+		if getgenv().autoRetry then
+			startAutoRetry()
+		else
+			stopAutoRetry()
+		end
+	end
+end)
+
+-------------------------------------------------------
+-- TOGGLE BUTTON FOR ENTIRE GUI
+-------------------------------------------------------
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0, 10, 0, 10)  -- 좌측 상단
+toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 20
+toggleBtn.Text = "👁"
+toggleBtn.AutoButtonColor = false
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Active = true
+
+local draggingToggle = false
+local dragStartToggle, startPosToggle
+
+toggleBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingToggle = true
+		dragStartToggle = input.Position
+		startPosToggle = toggleBtn.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingToggle = false
+			end
+		end)
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if draggingToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStartToggle
+		toggleBtn.Position = startPosToggle + UDim2.new(0, delta.X, 0, delta.Y)
+	end
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
