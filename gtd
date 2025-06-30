@@ -1,0 +1,155 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "MultiActionGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 180)
+frame.Position = UDim2.new(0.5, -125, 0.5, -90)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+
+-- 드래그 기능
+local dragging = false
+local dragStartPos, frameStartPos
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStartPos = input.Position
+		frameStartPos = frame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStartPos
+		frame.Position = frameStartPos + UDim2.new(0, delta.X, 0, delta.Y)
+	end
+end)
+
+-- 버튼: All-in-One
+local toggleButton = Instance.new("TextButton", frame)
+toggleButton.Size = UDim2.new(1, -20, 0, 50)
+toggleButton.Position = UDim2.new(0, 10, 0, 10)
+toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 18
+toggleButton.Text = "▶ Start Actions"
+
+-- 버튼: Anti-AFK
+local afkButton = Instance.new("TextButton", frame)
+afkButton.Size = UDim2.new(1, -20, 0, 40)
+afkButton.Position = UDim2.new(0, 10, 0, 70)
+afkButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+afkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+afkButton.Font = Enum.Font.GothamBold
+afkButton.TextSize = 16
+afkButton.Text = "💤 Start Anti-AFK"
+
+-- 상태 변수
+local allActionsOn = false
+local afkOn = false
+local allConn = {}
+local afkConn
+
+-- 참조할 GUI
+local gameEndGui = player:WaitForChild("PlayerGui"):WaitForChild("GameGui"):WaitForChild("Screen"):WaitForChild("Middle"):WaitForChild("GameEnd")
+local restartSent = false
+local voteSent = false
+
+-- All-in-One 기능
+local function startAll()
+	local acc = 0
+
+	local skipWave = ReplicatedStorage:WaitForChild("RemoteFunctions"):WaitForChild("SkipWave")
+	local restartGame = ReplicatedStorage:WaitForChild("RemoteFunctions"):WaitForChild("RestartGame")
+	local placeUnit = ReplicatedStorage:WaitForChild("RemoteFunctions"):WaitForChild("PlaceUnit")
+	local voteDifficulty = ReplicatedStorage:WaitForChild("RemoteFunctions"):WaitForChild("PlaceDifficultyVote")
+
+	allConn.actions = RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc >= 0.01 then
+			acc = 0
+			skipWave:InvokeServer("y")
+			placeUnit:InvokeServer("unit_gnome_npc", {
+				Valid = true,
+				Rotation = 180,
+				CF = CFrame.new(-338.585, 63.384, -211.861),
+				Position = Vector3.new(-338.585, 63.384, -211.861)
+			})
+		end
+
+		-- GameEnd가 나타나면 1회 실행
+		if gameEndGui.Visible and not restartSent then
+			restartSent = true
+			restartGame:InvokeServer()
+		elseif not gameEndGui.Visible then
+			restartSent = false
+		end
+
+		if gameEndGui.Visible and not voteSent then
+			voteSent = true
+			voteDifficulty:InvokeServer("dif_impossible")
+		elseif not gameEndGui.Visible then
+			voteSent = false
+		end
+	end)
+end
+
+local function stopAll()
+	if allConn.actions then
+		allConn.actions:Disconnect()
+	end
+end
+
+-- 토글 버튼 연결
+toggleButton.MouseButton1Click:Connect(function()
+	allActionsOn = not allActionsOn
+	toggleButton.Text = allActionsOn and "⏹ Stop Actions" or "▶ Start Actions"
+	if allActionsOn then
+		startAll()
+	else
+		stopAll()
+	end
+end)
+
+-- Anti-AFK 기능
+afkButton.MouseButton1Click:Connect(function()
+	afkOn = not afkOn
+	afkButton.Text = afkOn and "🛑 Stop Anti-AFK" or "💤 Start Anti-AFK"
+	if afkOn then
+		local acc = 0
+		afkConn = RunService.Heartbeat:Connect(function(dt)
+			acc += dt
+			if acc >= 60 then
+				acc = 0
+				VirtualUser:Button2Down(Vector2.zero, camera.CFrame)
+				task.wait(1)
+				VirtualUser:Button2Up(Vector2.zero, camera.CFrame)
+			end
+		end)
+	else
+		if afkConn then
+			afkConn:Disconnect()
+		end
+	end
+end)
