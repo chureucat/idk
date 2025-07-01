@@ -73,6 +73,8 @@ local afkConn
 
 -- 참조할 GUI
 local gameEndGui = player:WaitForChild("PlayerGui"):WaitForChild("GameGui"):WaitForChild("Screen"):WaitForChild("Middle"):WaitForChild("GameEnd")
+local cashLabel = player:WaitForChild("PlayerGui"):WaitForChild("GameGui"):WaitForChild("Screen"):WaitForChild("Bottom"):WaitForChild("Cash")
+
 local restartSent = false
 local voteSent = false
 
@@ -87,18 +89,24 @@ local function startAll()
 
 	allConn.actions = RunService.Heartbeat:Connect(function(dt)
 		acc += dt
-		if acc >= 0.01 then
+		if acc >= 0.1 then
 			acc = 0
 			skipWave:InvokeServer("y")
-			placeUnit:InvokeServer("unit_gnome_npc", {
-				Valid = true,
-				Rotation = 180,
-				CF = CFrame.new(-338.585, 63.384, -211.861),
-				Position = Vector3.new(-338.585, 63.384, -211.861)
-			})
+
+			local text = cashLabel.Text -- 예: "$250"
+			local numberOnly = string.match(text, "%d+") -- 숫자만 추출
+			local cashAmount = tonumber(numberOnly)
+
+			if cashAmount and cashAmount >= 250 then
+				placeUnit:InvokeServer("unit_gnome_npc", {
+					Valid = true,
+					Rotation = 180,
+					CF = CFrame.new(-338.585, 63.384, -211.861),
+					Position = Vector3.new(-338.585, 63.384, -211.861)
+				})
+			end
 		end
 
-		-- GameEnd가 나타나면 1회 실행
 		if gameEndGui.Visible and not restartSent then
 			restartSent = true
 			restartGame:InvokeServer()
@@ -118,6 +126,7 @@ end
 local function stopAll()
 	if allConn.actions then
 		allConn.actions:Disconnect()
+		allConn.actions = nil
 	end
 end
 
@@ -150,6 +159,7 @@ afkButton.MouseButton1Click:Connect(function()
 	else
 		if afkConn then
 			afkConn:Disconnect()
+			afkConn = nil
 		end
 	end
 end)
