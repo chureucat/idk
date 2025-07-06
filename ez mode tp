@@ -1,0 +1,157 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "MultiActionGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 230)
+frame.Position = UDim2.new(0.5, -125, 0.5, -115)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+
+-- 드래그 기능
+local dragging = false
+local dragStartPos, frameStartPos
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStartPos = input.Position
+		frameStartPos = frame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStartPos
+		frame.Position = frameStartPos + UDim2.new(0, delta.X, 0, delta.Y)
+	end
+end)
+
+-- 버튼 생성 함수
+local function createButton(text, posY, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -20, 0, 40)
+	btn.Position = UDim2.new(0, 10, 0, posY)
+	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 16
+	btn.Text = text
+	btn.Parent = frame
+	btn.MouseButton1Click:Connect(callback)
+	return btn
+end
+
+local placeUnit = game:GetService("ReplicatedStorage"):WaitForChild("RemoteFunctions"):WaitForChild("PlaceUnit")
+
+-- 버튼 2: 텔레포트 & 초방
+createButton("텔레포트 & 초방", 10, function()
+	local character = player.Character
+	if not character or not character.PrimaryPart then return end
+
+	local tpPos = Vector3.new(-338, 66, -106)
+	character:SetPrimaryPartCFrame(CFrame.new(tpPos))
+
+	task.delay(0.2, function()
+		if not character or not character.PrimaryPart then return end
+		local pos = character.PrimaryPart.Position
+		local args = {
+			"unit_electric_beetroot",
+			{
+				Valid = true,
+				Rotation = 180,
+				CF = CFrame.new(pos),
+				Position = pos
+			}
+		}
+		placeUnit:InvokeServer(unpack(args))
+	end)
+end)
+
+-- 버튼 3: 텔레포트 & 초방
+createButton("텔레포트 & 초방", 60, function()
+	local character = player.Character
+	if not character or not character.PrimaryPart then return end
+
+	local tpPos = Vector3.new(-333, 66, -106)
+	character:SetPrimaryPartCFrame(CFrame.new(tpPos))
+
+	task.delay(0.2, function()
+		if not character or not character.PrimaryPart then return end
+		local pos = character.PrimaryPart.Position
+		local args = {
+			"unit_electric_beetroot",
+			{
+				Valid = true,
+				Rotation = 180,
+				CF = CFrame.new(pos),
+				Position = pos
+			}
+		}
+		placeUnit:InvokeServer(unpack(args))
+	end)
+end)
+
+-- 버튼 4: 텔레포트 & unit_bloodvine 설치
+createButton("텔레포트 & 블러드바인", 110, function()
+	local character = player.Character
+	if not character or not character.PrimaryPart then return end
+
+	local tpPos = Vector3.new(-325, 66, -127)
+	character:SetPrimaryPartCFrame(CFrame.new(tpPos))
+
+	task.delay(0.2, function()
+		if not character or not character.PrimaryPart then return end
+		local pos = character.PrimaryPart.Position
+		local args = {
+			"unit_bloodvine",
+			{
+				Valid = true,
+				Rotation = 180,
+				CF = CFrame.new(pos),
+				Position = pos
+			}
+		}
+		placeUnit:InvokeServer(unpack(args))
+	end)
+end)
+
+-- 카메라 토글 변수 및 핸들러
+local cameraLocked = false
+local cameraConnection
+
+createButton("카메라 위에서 보기 토글", 160, function()
+	cameraLocked = not cameraLocked
+	if cameraLocked then
+		local RunService = game:GetService("RunService")
+		cameraConnection = RunService:BindToRenderStep("TopDownCamera", Enum.RenderPriority.Camera.Value, function()
+			local character = player.Character
+			if character and character.PrimaryPart then
+				local rootPos = character.PrimaryPart.Position
+				local camPos = rootPos + Vector3.new(0, 40, 0)
+				camera.CFrame = CFrame.new(camPos, rootPos)
+			end
+		end)
+	else
+		if cameraConnection then
+			cameraConnection:Disconnect()
+			cameraConnection = nil
+		end
+	end
+end)
