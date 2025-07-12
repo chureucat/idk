@@ -1,4 +1,4 @@
--- SERVICES
+-- SERVICES 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -21,7 +21,7 @@ frame.BorderSizePixel = 0
 frame.Active = true
 frame.Parent = gui
 
--- 드래그 기능
+-- 프레임 드래그 기능
 local dragging = false
 local dragStartPos, frameStartPos
 
@@ -71,12 +71,13 @@ local afkOn = false
 local allConn = {}
 local afkConn
 
--- 참조할 GUI
+-- GUI 요소 접근
 local gameEndGui = player:WaitForChild("PlayerGui"):WaitForChild("GameGui"):WaitForChild("Screen"):WaitForChild("Middle"):WaitForChild("GameEnd")
 local cashLabel = player:WaitForChild("PlayerGui"):WaitForChild("GameGui"):WaitForChild("Screen"):WaitForChild("Bottom"):WaitForChild("Cash")
 
 local restartSent = false
 local voteSent = false
+local unitPlaced = false -- 유닛 한 번만 배치되게 제어
 
 -- All-in-One 기능
 local function startAll()
@@ -91,34 +92,35 @@ local function startAll()
 		acc += dt
 		if acc >= 0.1 then
 			acc = 0
+
 			skipWave:InvokeServer("y")
 
-			local text = cashLabel.Text -- 예: "$250"
-			local numberOnly = string.match(text, "%d+") -- 숫자만 추출
+			local text = cashLabel.Text
+			local numberOnly = string.match(text, "%d+")
 			local cashAmount = tonumber(numberOnly)
 
-			if cashAmount and cashAmount >= 250 then
-				placeUnit:InvokeServer("unit_gnome_npc", {
+			if cashAmount and cashAmount >= 250 and not unitPlaced then
+				placeUnit:InvokeServer("unit_tomato_plant", {
 					Valid = true,
 					Rotation = 180,
-					CF = CFrame.new(-338.585, 63.384, -211.861),
-					Position = Vector3.new(-338.585, 63.384, -211.861)
+					CF = CFrame.new(-73.58025360107422, -29.522750854492188, 131.98529052734375, -1, 0, -8.742277657347586e-08, 0, 1, 0, 8.742277657347586e-08, 0, -1),
+					Position = Vector3.new(-73.58025360107422, -29.522750854492188, 131.98529052734375)
 				})
+				unitPlaced = true
 			end
-		end
 
-		if gameEndGui.Visible and not restartSent then
-			restartSent = true
-			restartGame:InvokeServer()
-		elseif not gameEndGui.Visible then
-			restartSent = false
-		end
+			if gameEndGui.Visible and not restartSent then
+				restartSent = true
+				restartGame:InvokeServer()
 
-		if gameEndGui.Visible and not voteSent then
-			voteSent = true
-			voteDifficulty:InvokeServer("dif_impossible")
-		elseif not gameEndGui.Visible then
-			voteSent = false
+				-- 0.2초 뒤에 투표 실행
+				task.delay(0.2, function()
+					voteDifficulty:InvokeServer("dif_impossible")
+					unitPlaced = false -- 투표 이후 유닛 다시 배치 가능
+				end)
+			elseif not gameEndGui.Visible then
+				restartSent = false
+			end
 		end
 	end)
 end
@@ -130,7 +132,7 @@ local function stopAll()
 	end
 end
 
--- 토글 버튼 연결
+-- 버튼 연결: All-in-One
 toggleButton.MouseButton1Click:Connect(function()
 	allActionsOn = not allActionsOn
 	toggleButton.Text = allActionsOn and "⏹ Stop Actions" or "▶ Start Actions"
