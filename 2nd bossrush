@@ -295,7 +295,7 @@ nameBox.Font=Enum.Font.Gotham
 nameBox.TextSize=16
 nameBox.PlaceholderText="Player Name"
 nameBox.ClearTextOnFocus=false
-nameBox.Text = "sdpctspin"
+nameBox.Text = "hoppang_xyz"
 
 getgenv().sending=false; local sendConn
 local sendBtn=Instance.new("TextButton",frame)
